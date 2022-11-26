@@ -38,7 +38,6 @@ def test_main_without_max_version(capsys, args, result, github_env):
     captured = capsys.readouterr()
     assert json.loads(captured.out) == result
 
-    print('run workflows')
     env, output = github_env
     result_json = json.dumps(result)
     assert env.read_text() == f'LATEST_PYTHON_VERSIONS={result_json}'
