@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -28,9 +29,10 @@ def github_env(tmp_path):
 @responses.activate
 @pytest.mark.parametrize('args, result', data)
 def test_main_without_max_version(capsys, args, result, github_env):
-    with open('versions.json') as f:
+    root_dir = Path(__file__).parent.parent
+    with open(root_dir / 'versions.json') as f:
         responses.add(responses.Response(method='GET', url=GHA_PYTHON_VERSIONS_URL, json=json.load(f)))
-    with open('eol.json') as f:
+    with open(root_dir / 'eol.json') as f:
         responses.add(responses.Response(method='GET', url=EOL_PYTHON_VERSIONS_URL, json=json.load(f)))
     main(*args)
     captured = capsys.readouterr()
