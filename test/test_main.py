@@ -1,4 +1,6 @@
 import json
+import os
+from unittest import mock
 
 import pytest
 import responses
@@ -15,9 +17,17 @@ data = [
 ]
 
 
+@pytest.fixture
+def github_env(tmp_path):
+    env_fp = tmp_path / 'env'
+    output_fp = tmp_path / 'output'
+    with mock.patch.dict(os.environ, {'GITHUB_ENV': str(env_fp), 'GITHUB_OUTPUT': str(output_fp)}):
+        yield env_fp, output_fp
+
+
 @responses.activate
 @pytest.mark.parametrize('args, result', data)
-def test_main_without_max_version(capsys, args, result):
+def test_main_without_max_version(capsys, args, result, github_env):
     with open('versions.json') as f:
         responses.add(responses.Response(method='GET', url=GHA_PYTHON_VERSIONS_URL, json=json.load(f)))
     with open('eol.json') as f:
