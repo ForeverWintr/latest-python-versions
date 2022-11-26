@@ -2,13 +2,42 @@ import datetime
 import json
 import os
 import sys
+from collections import defaultdict
 from distutils.util import strtobool
+from typing import NamedTuple
 
 import requests
 from packaging import version as semver
 
 GHA_PYTHON_VERSIONS_URL = 'https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json'
 EOL_PYTHON_VERSIONS_URL = 'https://endoflife.date/api/python.json'
+
+
+class Platform(NamedTuple):
+    name: str
+    arch: str
+    version: str = ''
+
+    def __str__(self) -> str:
+        name = self.name
+        if self.version:
+            name = f'{name}-{self.version}'
+        return f'{name}-{self.arch}'
+
+
+def get_platform_to_version(stable_versions: dict) -> dict:
+    platform_to_version = defaultdict(set)
+    for version_object in stable_versions:
+        parsed_version = semver.parse(version_object['version'])
+
+        for file_object in version_object['files']:
+            p = Platform(
+                name=file_object['platform'],
+                version=file_object.get('platform_version', ''),
+                arch=file_object['arch'],
+            )
+            platform_to_version[p].add(parsed_version)
+    return platform_to_version
 
 
 def main(min_version: str, max_version: str, include_prereleases: str) -> None:
@@ -37,17 +66,20 @@ def main(min_version: str, max_version: str, include_prereleases: str) -> None:
     stable_versions = requests.get(GHA_PYTHON_VERSIONS_URL).json()
 
     versions = {}
-
-    for version_object in stable_versions:
-        version = version_object['version']
+    platform_versions = get_platform_to_version(stable_versions)
+    all_versions = sorted({v for versions in platform_versions.values() for v in versions}, reverse=True)
+    for version in all_versions:
 
         if not parsed_include_prereleases:
-            if semver.parse(version).is_prerelease:
+            if version.is_prerelease:
                 continue
 
-        if (major_minor := semver.parse('.'.join(version.split('.')[:2]))) not in versions:
+        breakpoint()
+        if (major_minor := semver.parse('.'.join(str(version).split('.')[:2]))) not in versions:
             if min_version <= major_minor <= max_version:
                 versions[major_minor] = version
+
+    breakpoint()
 
     version_json = json.dumps(list(versions.values()))
 
