@@ -7,7 +7,14 @@ import pytest
 import responses
 from packaging.version import Version
 
-from main import EOL_PYTHON_VERSIONS_URL, GHA_PYTHON_VERSIONS_URL, Platform, get_platform_to_version, main
+from main import (
+    EOL_PYTHON_VERSIONS_URL,
+    GHA_PYTHON_VERSIONS_URL,
+    Platform,
+    get_platform_to_version,
+    latest_minor_versions,
+    main,
+)
 
 data = [
     [('3.4', 'latest', 'false'), ['3.9.6', '3.8.11', '3.7.11', '3.6.14', '3.5.10', '3.4.10']],
@@ -90,3 +97,10 @@ def test_get_platform_to_version():
         Platform(name='linux', arch='x64', version='20.04'): {Version('3.6.7')},
         Platform(name='win32', arch='x86', version=''): {Version('3.6.7')},
     }
+
+
+def test_latest_minor_versions():
+    assert latest_minor_versions([Version('3.5.1'), Version('3.5.2'), Version('3.5'), Version('3.6')]) == [
+        Version('3.5.2'),
+        Version('3.6'),
+    ]
