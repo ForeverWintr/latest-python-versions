@@ -37,3 +37,8 @@ def test_main_without_max_version(capsys, args, result, github_env):
     main(*args)
     captured = capsys.readouterr()
     assert json.loads(captured.out) == result
+
+    env, output = github_env
+    result_json = json.dumps(result)
+    assert env.read_text() == f'LATEST_PYTHON_VERSIONS={result_json}'
+    assert output.read_text() == f'latest-python-versions={result_json}'
