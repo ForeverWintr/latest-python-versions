@@ -101,6 +101,6 @@ def test_get_platform_to_version():
 
 def test_latest_minor_versions():
     assert latest_minor_versions([Version('3.5.1'), Version('3.5.2'), Version('3.5'), Version('3.6')]) == [
-        Version('3.5.2'),
         Version('3.6'),
+        Version('3.5.2'),
     ]

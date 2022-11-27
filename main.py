@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import datetime
 import json
 import os
 import sys
+import typing as tp
 from collections import defaultdict
 from distutils.util import strtobool
-from typing import NamedTuple
 
 import requests
 from packaging import version as semver
@@ -13,7 +15,7 @@ GHA_PYTHON_VERSIONS_URL = 'https://raw.githubusercontent.com/actions/python-vers
 EOL_PYTHON_VERSIONS_URL = 'https://endoflife.date/api/python.json'
 
 
-class Platform(NamedTuple):
+class Platform(tp.NamedTuple):
     name: str
     arch: str
     version: str = ''
@@ -25,10 +27,23 @@ class Platform(NamedTuple):
         return f'{name}-{self.arch}'
 
 
-def get_platform_to_version(stable_versions: dict) -> dict:
+def get_platform_to_version(
+    stable_versions: list[dict],
+    min_version: semver.Version,
+    max_version: semver.Version,
+    include_prereleases: bool,
+) -> dict:
     platform_to_version = defaultdict(set)
     for version_object in stable_versions:
-        parsed_version = semver.parse(version_object['version'])
+        version_str = version_object['version']
+        parsed_version = semver.parse(version_str)
+        major_minor = semver.parse('.'.join(version_str.split('.')[:2]))
+
+        if not include_prereleases and parsed_version.is_prerelease:
+            continue
+
+        if major_minor > max_version or major_minor < min_version:
+            continue
 
         for file_object in version_object['files']:
             p = Platform(
@@ -38,6 +53,20 @@ def get_platform_to_version(stable_versions: dict) -> dict:
             )
             platform_to_version[p].add(parsed_version)
     return platform_to_version
+
+
+def latest_minor_versions(all_versions: tp.Iterable[semver.Version]) -> list[semver.Version]:
+    '''Filter the given list of versions to include only the latest for each minor version. E.g.,
+    [3.9.1, 3.9.2] is filtered to [3.9.2]
+    '''
+    latest_versions: dict[semver.Version, semver.Version] = {}
+    for version in all_versions:
+        major_minor = semver.parse('.'.join(str(version).split('.')[:2]))
+
+        if not (current := latest_versions.get(major_minor)) or current < version:
+            latest_versions[major_minor] = version
+
+    return sorted(latest_versions.values(), reverse=True)
 
 
 def main(min_version: str, max_version: str, include_prereleases: str) -> None:
@@ -65,23 +94,19 @@ def main(min_version: str, max_version: str, include_prereleases: str) -> None:
 
     stable_versions = requests.get(GHA_PYTHON_VERSIONS_URL).json()
 
-    versions = {}
-    platform_versions = get_platform_to_version(stable_versions)
-    all_versions = sorted({v for versions in platform_versions.values() for v in versions}, reverse=True)
-    for version in all_versions:
+    platform_versions = get_platform_to_version(
+        stable_versions,
+        min_version=min_version,
+        max_version=max_version,
+        include_prereleases=parsed_include_prereleases,
+    )
+    semver_to_original = {semver.parse(v['version']): v['version'] for v in stable_versions}
+    latest_versions = latest_minor_versions({v for versions in platform_versions.values() for v in versions})
 
-        if not parsed_include_prereleases:
-            if version.is_prerelease:
-                continue
+    # latest_versions_per_platform = {k: latest_minor_versions(v) for k, v in platform_versions.items()}
+    # pretty = {str(k): v for k, v in latest_versions_per_platform.items()}
 
-        breakpoint()
-        if (major_minor := semver.parse('.'.join(str(version).split('.')[:2]))) not in versions:
-            if min_version <= major_minor <= max_version:
-                versions[major_minor] = version
-
-    breakpoint()
-
-    version_json = json.dumps(list(versions.values()))
+    version_json = json.dumps([semver_to_original[v] for v in latest_versions])
 
     with open(os.environ['GITHUB_ENV'], 'a') as f:
         f.write(f'LATEST_PYTHON_VERSIONS={version_json}')
